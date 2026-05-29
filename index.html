@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NOXEZDRIPS — Wear the Night</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:#050505;color:#f0f0ef;font-family:'Cormorant Garamond',serif;overflow-x:hidden}
+input,textarea,select,button{font-family:'Space Mono',monospace}
+input::placeholder,textarea::placeholder{color:#333}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-track{background:#0a0a0a}::-webkit-scrollbar-thumb{background:#222}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes heroIn{from{opacity:0;transform:translateY(32px)}to{opacity:1;transform:translateY(0)}}
+@keyframes mq{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@keyframes loadbar{from{left:-100%}to{left:100%}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// ══════════════════════════════════════════
+//  SUPABASE  —  cross-device sync
+// ══════════════════════════════════════════
+const SUPA_URL = "https://weurkjyqqtxwpekzftng.supabase.co";
+const SUPA_KEY = "sb_publishable_sp5OzhzdRveQPwLs2zZ0Sg_uQDJWDz3";
+const { createClient } = window.supabase;
+const db = createClient(SUPA_URL, SUPA_KEY);
+
+// ══════════════════════════════════════════
+//  CREDENTIALS
+// ══════════════════════════════════════════
+const ADMIN_EMAIL = "vibesabhay@gmail.com";
+const ADMIN_PASS  = "122002";
+
+// ══════════════════════════════════════════
+//  DB HELPERS
+// ══════════════════════════════════════════
+const DB = {
+  async getProducts(){
+    const{data}=await db.from("products").select("*").order("created_at",{ascending:false});
+    return data||[];
+  },
+  async addProduct(p){
+    const{error}=await db.from("products").insert(p);
+    return !error;
+  },
+  async updateProduct(id,updates){
+    await db.from("products").update(updates).eq("id",id);
+  },
+  async deleteProduct(id){
+    await db.from("products").delete().eq("id",id);
+  },
+  async getOrders(){
+    const{data}=await db.from("orders").select("*").order("created_at",{ascending:false});
+    return data||[];
+  },
+  async addOrder(o){
+    await db.from("orders").insert(o);
+  },
+  async updateOrder(orderId,updates){
+    await db.from("orders").update(updates).eq("order_id",orderId);
+  },
+  async getUserByEmail(email){
+    const{data}=await db.from("users").select("*").eq("email",email.toLowerCase());
+    return data&&data.length>0?data[0]:null;
+  },
+  async addUser(u){
+    await db.from("users").insert(u);
+  },
+  async getMyOrders(userId){
+    const{data}=await db.from("orders").select("*").eq("user_id",userId).order("created_at",{ascending:false});
+    return data||[];
+  },
+  async getAdmins(){
+    const{data}=await db.from("admins").select("*").order("created_at",{ascending:false});
+    return data||[];
+  },
+  async addAdmin(a){
+    const{error}=await db.from("admins").insert(a);
+    return !error;
+  },
+  async deleteAdmin(id){
+    await db.from("admins").delete().eq("id",id);
+  },
+  async getAdminByEmail(email){
+    const{data}=await db.from("admins").select("*").eq("email",email.toLowerCase());
+    return data&&data.length>0?data[0]:null;
+  }
+};
+
+// ══════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════
+const uid    = ()=>Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+const newOid = ()=>"NXD-"+Array.from({length:6},()=>"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[Math.floor(Math.random()*36)]).join("");
+const money  = n=>"₹"+Number(n).toLocaleString("en-IN");
+const pw     = s=>btoa(s+":nxd2024");
+
+async function copyText(text,cb){
+  try{await navigator.clipboard.writeText(text);cb();}
+  catch{
+    const el=document.createElement("textarea");
+    el.value=text; document.body.appendChild(el);
+    el.select(); document.execCommand("copy");
+    document.body.removeChild(el); cb();
+  }
+}
+
+async function shrinkImg(file){
+  return new Promise(res=>{
+    const fr=new FileReader();
+    fr.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        const c=document.createElement("canvas");
+        const sc=Math.min(700/img.width,1);
+        c.width=img.width*sc; c.height=img.height*sc;
+        c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+        res(c.toDataURL("image/jpeg",0.75));
+      };
+      img.src=e.target.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+
+// ══════════════════════════════════════════
+//  DESIGN TOKENS
+// ══════════════════════════════════════════
+const T={
+  bg:"#050505",bg2:"#0a0a0a",card:"#0f0f0f",card2:"#141414",
+  bdr:"#1c1c1c",bdr2:"#252525",
+  acc:"#c8ff00",acc2:"rgba(200,255,0,.08)",
+  red:"#ff3c3c",white:"#f0f0ef",mid:"#666",mut:"#333",
+  blue:"#6496ff",orange:"#ffa500",green:"#00c864"
+};
+const sCol=(s,c)=>{
+  if(c)return T.mid;
+  return{Placed:T.acc,Accepted:T.blue,Dispatched:T.orange,"Out for Delivery":T.red,Delivered:T.green}[s]||T.acc;
+};
+const SI={background:T.card2,border:`1px solid ${T.bdr2}`,color:T.white,padding:".85rem 1rem",fontSize:".72rem",letterSpacing:".06em",outline:"none",width:"100%",fontFamily:"'Space Mono',monospace"};
+const LBL={fontFamily:"'Space Mono',monospace",fontSize:".58rem",letterSpacing:".2em",textTransform:"uppercase",color:T.mid};
+
+// ══════════════════════════════════════════
+//  TOAST
+// ══════════════════════════════════════════
+function Toast({t}){
+  if(!t)return null;
+  const col=t.type==="ok"?T.acc:t.type==="err"?T.red:T.white;
+  const b=t.type==="ok"?"rgba(200,255,0,.25)":t.type==="err"?"rgba(255,60,60,.25)":T.bdr2;
+  return<div style={{position:"fixed",bottom:"1.8rem",right:"1.8rem",zIndex:9999,background:T.card2,border:`1px solid ${b}`,color:col,fontFamily:"'Space Mono',monospace",fontSize:".65rem",letterSpacing:".1em",padding:".9rem 1.4rem",maxWidth:300,lineHeight:1.6,animation:"fadeUp .3s ease",boxShadow:"0 8px 40px rgba(0,0,0,.8)"}}>{t.msg}</div>;
+}
+
+// ══════════════════════════════════════════
+//  AUTH MODAL
+// ══════════════════════════════════════════
+function AuthModal({show,onClose,onAuth}){
+  const[mode,setMode]=useState("in");
+  const[email,setEmail]=useState("");
+  const[name,setName]=useState("");
+  const[phone,setPhone]=useState("");
+  const[pass,setPass]=useState("");
+  const[err,setErr]=useState("");
+  const[busy,setBusy]=useState(false);
+  useEffect(()=>{if(show){setErr("");setEmail("");setPass("");setName("");setPhone("");setBusy(false);}},[show]);
+
+  async function signIn(){
+    setErr(""); setBusy(true);
+    if(!email.trim()||!pass.trim()){setErr("Fill all fields.");setBusy(false);return;}
+    // Main admin
+    if(email.trim().toLowerCase()===ADMIN_EMAIL.toLowerCase()){
+      if(pass===ADMIN_PASS){onAuth({id:"main-admin",email:ADMIN_EMAIL,name:"Admin",role:"admin",isMain:true});setBusy(false);return;}
+      setErr("Wrong password.");setBusy(false);return;
+    }
+    // Partner admin
+    const partnerAdmin=await DB.getAdminByEmail(email.trim());
+    if(partnerAdmin){
+      if(partnerAdmin.password!==pw(pass)){setErr("Wrong password.");setBusy(false);return;}
+      onAuth({...partnerAdmin,role:"admin",isMain:false});setBusy(false);return;
+    }
+    // Customer
+    const found=await DB.getUserByEmail(email.trim());
+    if(!found){setErr("No account found. Sign up first.");setBusy(false);return;}
+    if(found.password!==pw(pass)){setErr("Wrong password.");setBusy(false);return;}
+    onAuth(found);setBusy(false);
+  }
+
+  async function signUp(){
+    setErr(""); setBusy(true);
+    if(!name.trim()||!email.trim()||!phone.trim()||!pass.trim()){setErr("Fill all fields.");setBusy(false);return;}
+    if(email.trim().toLowerCase()===ADMIN_EMAIL.toLowerCase()){setErr("That email is reserved.");setBusy(false);return;}
+    const existing=await DB.getUserByEmail(email.trim());
+    if(existing){setErr("Account exists. Sign in.");setBusy(false);return;}
+    const u={id:uid(),email:email.trim().toLowerCase(),name:name.trim(),phone:phone.trim(),password:pw(pass),role:"customer",created_at:new Date().toISOString()};
+    await DB.addUser(u);
+    onAuth(u); setBusy(false);
+  }
+
+  if(!show)return null;
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(5,5,5,.97)",zIndex:800,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{background:T.card,border:`1px solid ${T.bdr2}`,padding:"2.8rem",width:"100%",maxWidth:420,position:"relative",animation:"fadeUp .35s ease"}}>
+        <button onClick={onClose} style={{position:"absolute",top:"1.2rem",right:"1.2rem",background:"none",border:"none",color:T.mut,fontFamily:"'Space Mono',monospace",fontSize:".6rem",cursor:"pointer",letterSpacing:".12em"}}>✕ CLOSE</button>
+        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"2.2rem",letterSpacing:".1em",marginBottom:".4rem"}}>NOXEZ<span style={{color:T.acc}}>DRIPS</span></div>
+        <div style={{fontStyle:"italic",color:T.mid,fontSize:"1rem",marginBottom:"2rem"}}>{mode==="in"?"Welcome back.":"Join the movement."}</div>
+        <div style={{display:"flex",borderBottom:`1px solid ${T.bdr}`,marginBottom:"1.8rem"}}>
+          {[["in","Sign In"],["up","Sign Up"]].map(([id,label])=>(
+            <button key={id} onClick={()=>{setMode(id);setErr("");}} style={{flex:1,fontFamily:"'Space Mono',monospace",fontSize:".62rem",letterSpacing:".18em",textTransform:"uppercase",background:"transparent",border:"none",borderBottom:`2px solid ${mode===id?T.acc:"transparent"}`,color:mode===id?T.acc:T.mid,padding:".8rem",cursor:"pointer",marginBottom:-1,transition:"all .2s"}}>{label}</button>
+          ))}
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:"1rem"}}>
+          {mode==="up"&&<div style={{display:"flex",flexDirection:"column",gap:".5rem"}}><label style={LBL}>Full Name</label><input style={SI} placeholder="Your full name" value={name} onChange={e=>setName(e.target.value)}/></div>}
+          <div style={{display:"flex",flexDirection:"column",gap:".5rem"}}><label style={LBL}>Email</label><input style={SI} type="email" placeholder="you@email.com" value={email} onChange={e=>setEmail(e.target.value)}/></div>
+          {mode==="up"&&<div style={{display:"flex",flexDirection:"column",gap:".5rem"}}><label style={LBL}>Phone</label><input style={SI} type="tel" placeholder="+91 00000 00000" value={phone} onChange={e=>setPhone(e.target.value)}/></div>}
+          <div style={{display:"flex",flexDirection:"column",gap:".5rem"}}><label style={LBL}>Password</label><input style={SI} type="password" placeholder="••••••••" value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&(mode==="in"?signIn():signUp())}/></div>
+          {err&&<div style={{fontFamily:"'Space Mono',monospace",fontSize:".6rem",color:T.red,letterSpacing:".08em"}}>⚠ {err}</div>}
+          <button onClick={mode==="in"?signIn:signUp} disabled={busy} style={{background:busy?T.mut:T.acc,color:T.bg,border:"none",padding:"1rem",fontFamily:"'Space Mono',monospace",fontSize:".72rem",letterSpacing:".2em",textTransform:"uppercase",fontWeight:700,cursor:busy?"default":"pointer",marginTop:".5rem"}}>
+            {busy?"Please wait...":(mode==="in"?"Sign In →":"Create Account →")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════
+//  SIZE STOCK CONTROL
+// ══════════════════════════════════════════
+function SizeStock({label,data,onChange}){
+  const on=data?.on??true;
+  const stock=data?.stock??0;
+  return(
+    <div style={{background:T.bg2,border:`1px solid ${on?T.bdr2:"rgba(255,60,60,.2)"}`,padding:".8rem .5rem",display:"flex",flexDirection:"column",alignItems:"center",gap:".5rem"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%"}}>
+        <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"1.3rem",letterSpacing:".06em",color:on?T.white:T.mut}}>{label}</span>
+        <button title={on?"Disable":"Enable"} onClick={()=>onChange({stock,on:!on})} style={{width:14,height:14,borderRadius:"50%",background:on?T.acc:"rgba(255,60,60,.5)",border:"none",cursor:"pointer",flexShrink:0,transition:"background .2s"}}/>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:".4rem",width:"100%",justifyContent:"center"}}>
+        <button onClick={()=>onChange({on,stock:Math.max(0,stock-1)})} style={{width:26,height:26,background:T.bdr2,border:"none",color:T.white,fontSize:"1rem",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
+        <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"1.5rem",color:!on?T.mut:stock===0?T.red:T.acc,minWidth:24,textAlign:"center"}}>{stock}</span>
+        <button onClick={()=>onChange({on,stock:stock+1})} style={{width:26,height:26,background:T.acc,border:"none",color:T.bg,fontSize:"1rem",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+      </div>
+      <div style={{fontFamily:"'Space Mono',monospace",fontSize:".48rem",letterSpacing:".1em",textTransform:"uppercase",color:on?T.mid:T.red}}>{on?(stock===0?"out of stock":"active"):"disabled"}</div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════
+//  COPY ORDER ID BUTTON
+// ══════════════════════════════════════════
+function CopyBtn({orderId,toast_}){
+  const[copied,setCopied]=useState(false);
+  function doCopy(){
+    copyText("#"+orderId,()=>{
+      setCopied(true);
+      toast_("Order ID copied! 📋");
+      setTimeout(()=>setCopied(false),2000);
+    });
+  }
+  return(
+    <button onClick={doCopy} style={{fontFamily:"'Space Mono',monospace",fontSize:".58rem",letterSpacing:".15em",textTransform:"uppercase",background:copied?"rgba(200,255,0,.1)":"transparent",border:`1px solid ${copied?T.acc:T.bdr}`,color:copied?T.acc:T.mid,padding:".4rem .8rem",cursor:"pointer",transition:"all .3s",whiteSpace:"nowrap"}}>
+      {copied?"✓ Copied!":"📋 Copy ID"}
+    </button>
+  );
+}
+
+// ══════════════════════════════════════════
+//  MAIN APP
+// ══════════════════════════════════════════
+function NoxezdripsApp(){
+  const[page,setPage]=useState("home");
+  const[user,setUser]=useState(null);
+  const[products,setProducts]=useState([]);
+  const[orders,setOrders]=useState([]);
+  const[admins,setAdmins]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[selProd,setSelProd]=useState(null);
+  const[selSize,setSelSize]=useState(null);
+  const[showMenu,setShowMenu]=useState(false);
+  const[showAuth,setShowAuth]=useState(false);
+  const[adminTab,setAdminTab]=useState("orders");
+  const[toast,setToast]=useState(null);
+  const[dayMap,setDayMap]=useState({});
+  const[ckAddr,setCkAddr]=useState("");
+  const[lastOid,setLastOid]=useState("");
+  const[myOrders,setMyOrders]=useState([]);
+  const[searchQ,setSearchQ]=useState("");
+  const[newProd,setNewProd]=useState({name:"",price:"",desc:"",image:"",sizes:{S:{stock:0,on:true},M:{stock:0,on:true},L:{stock:0,on:true},XL:{stock:0,on:true}}});
+  const[newAdmin,setNewAdmin]=useState({email:"",name:"",password:""});
+  const[adminBusy,setAdminBusy]=useState(false);
+  const fileRef=useRef();
+
+  // ── BOOT ──────────────────────────────
+  useEffect(()=>{
+    async function boot(){
+      const p=await DB.getProducts();
+      setProducts(p);
+      // Restore session from localStorage
+      try{
+        const raw=localStorage.getItem("nxd-sess");
+        if(raw){
+          const saved=JSON.parse(raw);
+          if(saved&&saved.id&&saved.role) setUser(saved);
+        }
+      }catch{}
+      setLoading(false);
+    }
+    boot();
+  },[]);
+
+  // Load my orders when user changes
+  useEffect(()=>{
+    if(user?.role==="customer"){
+      DB.getMyOrders(user.id).then(o=>setMyOrders(o));
+    }
+  },[user]);
+
+  function toast_(msg,type="ok"){setToast({msg,type});setTimeout(()=>setToast(null),3200);}
+  function go(p){setPage(p);setShowMenu(false);window.scrollTo(0,0);}
+
+  function handleAuth(u){
+    setUser(u);
+    localStorage.setItem("nxd-sess",JSON.stringify(u));
+    setShowAuth(false);
+    toast_(`Welcome${u.role==="admin"?" back, Admin 👋":`, ${u.name}! 👋`}`);
+    if(u.role==="admin"){
+      DB.getAdmins().then(a=>setAdmins(a));
+      go("admin");
+    }
+  }
+
+  function logout(){
+    setUser(null);
+    localStorage.removeItem("nxd-sess");
+    go("home");
+    toast_("Signed out");
+  }
+
+  const totalStock=p=>Object.values(p.sizes||{}).filter(s=>s.on).reduce((a,s)=>a+(s.stock||0),0);
+
+  // ── PRODUCT ACTIONS ───────────────────
+  async function updateSize(pid,size,data){
+    const p=products.find(x=>x.id===pid);
+    if(!p)return;
+    const sizes={...p.sizes,[size]:data};
+    await DB.updateProduct(pid,{sizes});
+    setProducts(prev=>prev.map(x=>x.id===pid?{...x,sizes}:x));
+  }
+
+  async function deleteProduct(id,name){
+    if(!confirm(`Delete "${name}"?`))return;
+    await DB.deleteProduct(id);
+    setProducts(prev=>prev.filter(p=>p.id!==id));
+    toast_(`"${name}" deleted`);
+  }
+
+  async function addProduct(){
+    if(!newProd.name.trim()||!newProd.price){toast_("Name and price required","err");return;}
+    const p={id:uid(),name:newProd.name.trim(),price:parseFloat(newProd.price),description:newProd.desc.trim(),image:newProd.image,sizes:newProd.sizes,created_at:new Date().toISOString()};
+    const ok=await DB.addProduct(p);
+    if(!ok){toast_("Error adding product. Check Supabase.","err");return;}
+    setProducts(prev=>[p,...prev]);
+    setNewProd({name:"",price:"",desc:"",image:"",sizes:{S:{stock:0,on:true},M:{stock:0,on:true},L:{stock:0,on:true},XL:{stock:0,on:true}}});
+    toast_(`"${p.name}" added! 🔥`);
+  }
+
+  async function handleImg(e){
+    const file=e.target.files[0]; if(!file)return;
+    try{const img=await shrinkImg(file);setNewProd({...newProd,image:img});toast_("Image ready ✓");}
+    catch{toast_("Image upload failed","err");}
+  }
+
+  // ── ORDER ACTIONS ─────────────────────
+  async function placeOrder(){
+    if(!user){toast_("Sign in to order","err");setShowAuth(true);return;}
+    if(!selSize){toast_("Select a size","err");return;}
+    if(!ckAddr.trim()){toast_("Enter delivery address","err");return;}
+    const oid=newOid();
+    const order={id:uid(),order_id:oid,user_id:user.id,customer_name:user.name,phone:user.phone,address:ckAddr.trim(),product_id:selProd.id,product_name:selProd.name,product_image:selProd.image||"",size:selSize,price:selProd.price,status:"Placed",delivery_days:0,cancelled:false,created_at:new Date().toISOString()};
+    await DB.addOrder(order);
+    // Decrement stock
+    const p=products.find(x=>x.id===selProd.id);
+    if(p){
+      const sizes={...p.sizes};
+      sizes[selSize]={...sizes[selSize],stock:Math.max(0,(sizes[selSize].stock||0)-1)};
+      await DB.updateProduct(p.id,{sizes});
+      setProducts(prev=>prev.map(x=>x.id===p.id?{...x,sizes}:x));
+    }
+    setLastOid(oid); setCkAddr(""); setSelSize(null);
+    setMyOrders(prev=>[order,...prev]);
+    go("confirmation"); toast_("Order placed! 🎉");
+  }
+
+  async function cancelMyOrder(oid_){
+    if(!confirm(`Cancel order #${oid_}?`))return;
+    await DB.updateOrder(oid_,{cancelled:true});
+    setMyOrders(prev=>prev.map(o=>o.order_id===oid_?{...o,cancelled:true}:o));
+    toast_("Order cancelled");
+  }
+
+  async function loadAdminOrders(){
+    const o=await DB.getOrders();
+    setOrders(o);
+  }
+
+  async function acceptOrder(oid_){
+    const d=parseInt(dayMap[oid_]);
+    if(!d||d<1){toast_("Enter delivery days","err");return;}
+    await DB.updateOrder(oid_,{status:"Accepted",delivery_days:d});
+    setOrders(prev=>prev.map(o=>o.order_id===oid_?{...o,status:"Accepted",delivery_days:d}:o));
+    toast_(`Accepted — ${d} day${d>1?"s":""} ✅`);
+  }
+
+  async function setStatus(oid_,status){
+    await DB.updateOrder(oid_,{status});
+    setOrders(prev=>prev.map(o=>o.order_id===oid_?{...o,status}:o));
+    toast_(`→ ${status}`);
+  }
+
+  // ── ADMIN TEAM ACTIONS ────────────────
+  async function addPartnerAdmin(){
+    setAdminBusy(true);
+    if(!newAdmin.email.trim()||!newAdmin.name.trim()||!newAdmin.password.trim()){toast_("Fill all fields","err");setAdminBusy(false);return;}
+    if(newAdmin.email.trim().toLowerCase()===ADMIN_EMAIL.toLowerCase()){toast_("That email is reserved","err");setAdminBusy(false);return;}
+    const existing=await DB.getAdminByEmail(newAdmin.email.trim());
+    if(existing){toast_("Admin already exists","err");setAdminBusy(false);return;}
+    const a={id:uid(),email:newAdmin.email.trim().toLowerCase(),name:newAdmin.name.trim(),password:pw(newAdmin.password),added_by:ADMIN_EMAIL,created_at:new Date().toISOString()};
+    const ok=await DB.addAdmin(a);
+    if(!ok){toast_("Error adding admin","err");setAdminBusy(false);return;}
+    setAdmins(prev=>[a,...prev]);
+    setNewAdmin({email:"",name:"",password:""});
+    toast_(`${a.name} added as admin ✅`);
+    setAdminBusy(false);
+  }
+
+  async function removePartnerAdmin(id,name){
+    if(!confirm(`Remove ${name} as admin?`))return;
+    await DB.deleteAdmin(id);
+    setAdmins(prev=>prev.filter(a=>a.id!==id));
+    toast_(`${name} removed`);
+  }
+
+  // ── SEARCH FILTER ─────────────────────
+  const filteredOrders=orders.filter(o=>{
+    if(!searchQ.trim())return true;
+    const q=searchQ.toLowerCase();
+    return o.order_id?.toLowerCase().includes(q)||o.customer_name?.toLowerCase().includes(q)||o.phone?.toLowerCase().includes(q)||o.product_name?.toLowerCase().includes(q);
+  });
+
+  // ── LOADER ────────────────────────────
+  if(loading)return(
+    <div style={{background:T.bg,color:T.white,minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"1.5rem"}}>
+      <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"2.8rem",letterSpacing:".2em"}}>NOXEZ<span style={{color:T.acc}}>DRIPS</span></div>
+      <div style={{width:180,height:1,background:T.bdr,overflow:"hidden",position:"relative"}}><div style={{position:"absolute",top:0,height:"100%",width:"100%",background:T.acc,animation:"loadbar 1.3s ease forwards"}}/></div>
+    </div>
+  );
+
+  // ── NAV ───────────────────────────────
+  const Nav=(
+    <nav style={{position:"fixed",top:0,left:0,right:0,zIndex:500,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"1.3rem 2rem",background:page!=="home"?"rgba(5,5,5,.97)":"transparent",backdropFilter:page!=="home"?"blur(16px)":"none",borderBottom:page!=="home"?`1px solid ${T.bdr}`:"none",transition:"all .4s"}}>
+      <div onClick={()=>go("home")} style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"1.6rem",letterSpacing:".12em",cursor:"pointer"}}>NOXEZ<span style={{color:T.acc}}>DRIPS</span></div>
+      <div style={{display:"flex",alignItems:"center",gap:"1rem"}}>
+        {!user?(
+          <button onClick={()=>setShowAuth(true)} style={{fontFamily:"'Space Mono',monospace",fontSize:".6rem",letterSpacing:".18em",textTransform:"uppercase",background:T.acc,color:T.bg,border:"none",padding:".5rem 1.1rem",fontWeight:700,cursor:"pointer"}}>Sign In</button>
+        ):(
+          <div style={{display:"flex",alignItems:"center",gap:".8rem"}}>
+            <div style={{width:30,height:30,borderRadius:"50%",background:T.acc2,border:`1px solid ${T.acc}33`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Bebas Neue',sans-serif",fontSize:"1rem",color:T.acc}}>{user.name[0].toUpperCase()}</div>
+            {user.role==="admin"&&<button onClick={()=>{DB.getAdmins().then(a=>setAdmins(a));loadAdminOrders();go("admin");}} style={{fontFamily:"'Space Mono',monospace",fontSize:".58rem",letterSpacing:".15em",textTransform:"uppercase",background:"transparent",border:`1px solid ${T.acc}55`,color:T.acc,padding:".4rem .9rem",cursor:"pointer"}}>⚙ Panel</button>}
+          </div>
+        )}
+        <div onClick={()=>setShowMenu(!showMenu)} style={{cursor:"pointer",display:"flex",flexDirection:"column",gap:5,padding:"4px 2px"}}>
+          {[0,1,2].map(i=><span key={i} style={{display:"block",width:22,height:1,background:T.white,transition:"all .3s",transform:showMenu?(i===0?"rotate(45deg) translate(3px,-3px)":i===2?"rotate(-45deg) translate(3px,3px)":"none"):"none",opacity:showMenu&&i===1?0:1}}/>)}
+        </div>
+      </div>
+    </nav>
+  );
+
+  // ── MENU ──────────────────────────────
+  const Menu=showMenu&&(
+    <div style={{position:"fixed",inset:0,background:"rgba(5,5,5,.98)",zIndex:400,display:"flex",flexDirection:"column",justifyContent:"center",padding:"3rem 2rem"}}>
+      {[["Shop",()=>go("home")],["My Orders",()=>go("my-orders")]].map(([l,fn],i)=>(
+        <div key={l} onClick={fn} style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"clamp(2.5rem,6vw,3.5rem)",letterSpacing:".06em",marginBottom:".5rem",cursor:"pointer",color:T.white,animation:`fadeUp .3s ease ${i*.07}s both`,transition:"color .2s"}} onMouseEnter={e=>e.currentTarget.style.color=T.acc} onMouseLeave={e=>e.currentTarget.style.color=T.white}>{l}</div>
+      ))}
+      {user?.role==="admin"&&<div onClick={()=>{DB.getAdmins().then(a=>setAdmins(a));loadAdminOrders();go("admin");}} style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"clamp(2rem,5vw,3rem)",letterSpacing:".06em",cursor:"pointer",color:T.acc,animation:"fadeUp .3s ease .15s both",marginBottom:".5rem"}}>Admin Panel</div>}
+      <div style={{marginTop:"2.5rem",display:"flex",gap:"1rem",flexWrap:"wrap"}}>
+        {!user?(
+          <button onClick={()=>{setShowMenu(false);setShowAuth(true);}} style={{fontFamily:"'Space Mono',monospace",fontSize:".62rem",letterSpacing:".18em",textTransform:"uppercase",background:T.acc,color:T.bg,border:"none",padding:".7rem 1.5rem",fontWeight:700,cursor:"pointer"}}>Sign In / Sign Up</button>
+        ):(
+          <button onClick={logout} style={{fontFamily:"'Space Mono',monospace",fontSize:".62rem",letterSpacing:".18em",textTransform:"uppercase",background:"transparent",border:`1px solid rgba(255,60,60,.3)`,color:T.red,padding:".7rem 1.5rem",cursor:"pointer"}}>Sign Out</button>
+        )}
+      </div>
+      <div style={{marginTop:"3rem",paddingTop:"2rem",borderTop:`1px solid ${T.bdr}`,display:"flex",gap:"2rem"}}>
+        {["Instagram","TikTok","Twitter"].map(s=><span key={s} style={{fontFamily:"'Space Mono',monospace",fontSize:".58rem",letterSpacing:".2em",textTransform:"uppercase",color:T.mut}}>{s}</span>)}
+      </div>
+    </div>
+  );
+
+  return(
+    <div style={{background:T.bg,color:T.white,minHeight:"100vh",fontFamily:"'Cormorant Garamond',serif",fontWeight:300}}>
+      <Toast t={toast}/><AuthModal show={showAuth} onClose={()=>setShowAuth(false)} onAuth={handleAuth}/>
+      {Nav}{Menu}
+
+      {/* ════ HOME ════ */}
+      {page==="home"&&(
+        <div>
+          <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",justifyContent:"flex-end",padding:"7rem 2rem 4.5rem",position:"relative",overflow:"hidden"}}>
+            <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse 90% 60% at 75% 25%,rgba(200,255,0,.05),transparent 60%),radial-gradient(ellipse 60% 90% at 20% 75%,rgba(255,60,60,.04),transparent 60%)"}}/>
+            <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",fontFamily:"'Bebas Neue',sans-serif",fontSize:"23vw",color:"rgba(200,255,0,.022)",letterSpacing:"-.05em",pointerEvents:"none",whiteSpace:"nowrap",userSelect:"none"}}>NOXEZDRIPS</div>
+            <div style={{position:"relative",zIndex:1,animation:"heroIn .9s ease .2s both"}}>
+              <div style={{fontFamily:"'Space Mono',monospace",fontSize:".58rem",letterSpacing:".32em",textTransform:"uppercase",color:T.acc,marginBottom:"1rem"}}>SS26 Collection — Now Live</div>
+              <h1 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"clamp(4rem,10vw,9rem)",lineHeight:.88,letterSpacing:".04em"}}>WEAR<br/>THE<br/>NIGHT<span style={{color:T.acc}}>.</span></h1>
+              <p style={{fontStyle:"italic",fontSize:"1.2rem",color:T.mid,marginTop:"1.2rem",maxWidth:360,lineHeight:1.75}}>Unapologetic streetwear born in the dark.<br/>For those who move different.</p>
+              <div style={{display:"flex",gap:"1rem",marginTop:"2.5rem",flexWrap:"wrap"}}>
+                <button onClick={()=>document.getElementById("shop")?.scrollIntoView({behavior:"smooth"})} style={{fontFamily:"'Space Mono',monospace",fontSize:".68rem",letterSpacing:".2em",textTransform:"uppercase",background:T.acc,color:T.bg,border:"none",padding:".95rem 2.2rem",fontWeight:700,cursor:"pointer"}}>Shop the Drop</button>
+                {!user&&<button onClick={()=>setShowAuth(true)} style={{fontFamily:"'Space Mono',monospace",fontSize:".68rem",letterSpacing:".2em",textTransform:"uppercase",background:"transparent",color:T.white,border:`1px solid ${T.bdr2}`,padding:".95rem 2.2rem",cursor:"pointer"}}>Sign Up Free</button>}
+                {user&&<button onClick={()=>go("my-orders")} style={{fontFamily:"'Space Mono',monospace",fontSize:".68rem",letterSpacing:".2em",textTransform:"uppercase",background:"transparent",color:T.white,border:`1px solid ${T.bdr2}`,padding:".95rem 2.2rem",cursor:"pointer"}}>My Orders</button>}
+              </div>
+            </div>
+          </div>
+          <div style={{borderTop:`1px solid ${T.bdr}`,borderBottom:`1px solid ${T.bdr}`,overflow:"hidden",padding:".85rem 0",background:T.bg2}}>
+            <div style={{display:"flex",whiteSpace:"nowrap",animation:"mq 20s linear infinite"}}>
+              {[...Array(2)].flatMap((_,j)=>["New Drop SS26","Noxezdrips","Limited Stock","Wear The Night","COD Only","Premium Quality"].map((t,i)=>(
+                <span key={`${j}${i}`} style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:".78rem",letterSpacing:".3em",textTransform:"uppercase",color:T.mut,padding:"0 2rem",display:"inline-flex",alignItems:"center",gap:"1.5rem"}}>{t}<span style={{width:4,height:4,background:T.acc,borderRadius:"50%",display:"inline-block"}}/></span>
+              )))}
+            </div>
+          </div>
+          <div id="shop" style={{padding:"5rem 2rem"}}>
+            <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",borderBottom:`1px solid ${T.bdr}`,paddingBottom:"1.2rem",marginBottom:"2.5rem"}}>
+              <div><div style={{fontFamily:"'Space Mono',monospace",fontSize:".58rem",letterSpacing:".28em",textTransform:"uppercase",color:T.acc,marginBottom:".5rem"}}>SS26 Drop</div><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"clamp(2rem,4vw,3.5rem)",letterSpacing:".06em"}}>NEW ARRIVALS</div></div>
+              <div style={{fontFamily:"'Space Mono',monospace",fontSize:".58rem",letterSpacing:".15em",color:T.mut}}>{products.length} piece{products.length!==1?"s":""}</div>
+            </div>
+            {products.length===0?(
+              <div style={{padding:"5rem",textAlign:"center",border:`1px solid ${T.bdr}`,fontFamily:"'Space Mono',monospace",fontSize:".65rem",letterSpacing:".2em",textTransform:"uppercase",color:T.mut}}>No products yet — check back soon.</div>
+            ):(
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:"1.5px"}}>
+                {products.map(p=>{
+                  const oos=totalStock(p)===0;
+                  return(
+                    <div key={p.id} onClick={()=>!oos&&(setSelProd(p),setSelSize(null),go("product"))} style={{position:"relative",overflow:"hidden",background:T.card,cursor:oos?"default":"pointer",aspectRatio:"3/4"}}>
+                      {p.image?<img src={p.image} alt={p.name} style={{width:"100%",height:"100%",objectFit:"cover",transition:"transform .6s"}} onMouseEnter={e=>!oos&&(e.currentTarget.style.transform="scale(1.05)")} onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}/>:<div style={{width:"100%",height:"100%",background:"linear-gradient(140deg,#0d0d14,#1a1a2e)",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"7rem",color:"rgba(200,255,0,.05)"}}>{p.name[0]}</span></div>}
+                      <div style={{position:"absolute",top:"1rem",left:"1rem",zIndex:2,fontFamily:"'Space Mono',monospace",fontSize:".52rem",letterSpacing:".18em",textTransform:"uppercase",background:oos?T.mut:T.acc,color:oos?T.white:T.bg,padding:".3rem .6rem",fontWeight:700}}>{oos?"Out of Stock":"New"}</div>
+                      <div style={{position:"absolute",bottom:0,left:0,right:0,padding:"1.5rem 1.4rem",background:"linear-gradient(to top,rgba(5,5,5,.97),transparent)"}}>
+                        <div style={{fontFamily:"'Space Mono',monospace",fontSize:".52rem",letterSpacing:".22em",textTransform:"uppercase",color:T.acc,marginBottom:".3rem"}}>Noxezdrips SS26</div>
+                        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"1.3rem",letterSpacing:".07em"}}>{p.name}</div>
+                        <div style={{fontFamily:"'Space Mono',monospace",fontSize:".72rem",color:T.mid,marginTop:".3rem"}}>{money(p.price)}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <footer style={{borderTop:`1px solid ${T.bdr}`,background:T.bg2,padding:"3rem 2rem 2rem"}}>
+            <div style={{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:"2rem",marginBottom:"2rem",paddingBottom:"2rem",borderBottom:`1px solid ${T.bdr}`}}>
+              <div><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"1.4rem",letterSpacing:".12em"}}>NOXEZ<span style={{color:T.acc}}>DRIPS</span></div><div style={{fontStyle:"italic",color:T.mut,marginTop:".4rem"}}>Wear the night.</div></div>
+              <div style={{display:"flex",gap:"2rem",flexWrap:"wrap",alignItems:"center"}}>
+                <span onClick={()=>go("my-orders")} style={{fontFamily:"'Space Mono',monospace",fontSize:".58rem",letterSpacing:".18em",textTransform:"uppercase",color:T.mut,cursor:"pointer"}}>My Orders</span>
+                {["Instagram","TikTok","Twitter"].map(s=><span key={s} style={{fontFamily:"'Space Mono',monospace",fontSize:".58rem",letterSpacing:".18em",textTransform:"uppercase",color:T.mut}}>{s}</span>)}
+              </div>
+            </div>
+            <div style={{fontFamily:"'Space Mono',monospace",fontSize:".56rem",letterSpacing:".12em",color:T.mut}}>© 2026 NOXEZDRIPS. All rights reserved. No returns policy.</div>
+          </footer>
+        </div>
+      )}
+
+      {/* ════ PRODUCT ════ */}
+      {page==="product"&&selProd&&(
+        <div style={{padding:"6rem 2rem 4rem",maxWidth:1060,margin:"0 auto"}}>
+          <button onClick={()=>go("home")} style={{fontFamily:"'Space Mono',monospace",fontSize:".6rem",letterSpacing:".2em",textTransform:"uppercase",color:T.mid,background:"none",border:"none",marginBottom:"3rem",cursor:"pointer"}}>← Back to Shop</button>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"4rem",alignItems:"start"}}>
+            <div style={{aspectRatio:"3/4",overflow:"hidden",background:T.card}}>
+              {selProd.image?<img src={selProd.image} alt={selProd.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<div style={{width:"100%",height:"100%",minHeight:420,background:"linear-gradient(140deg,#0d0d14,#1a1a2e)",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"9rem",color:"rgba(200,255,0,.05)"}}>{selProd.name[0]}</span></div>}
+            </div>
+            <div style={{position:"sticky",top:"7rem"}}>
+              <div style={{fontFamily:"'Space Mono',monospace",fontSize:".58rem",letterSpacing:".28em",textTransform:"uppercase",color:T.acc,marginBottom:".8rem"}}>Noxezdrips SS26</div>
+              <h1 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"clamp(2.5rem,4vw,4.2rem)",letterSpacing:".05em",lineHeight:.92}}>{selProd.name}</h1>
+              <div style={{fontFamily:"'Space Mono',monospace",fontSize:"1.1rem",color:T.mid,marginTop:"1rem"}}>{money(selProd.price)}</div>
+              {selProd.description&&<p style={{fontSize:"1.05rem",lineHeight:1.85,color:T.mid,marginTop:"1.2rem",fontStyle:"italic"}}>{selProd.description}</p>}
+              <div style={{height:1,background:T.bdr,margin:"2rem 0"}}/>
+              <div style={{fontFamily:"'Space Mono',monospace",fontSize:".58rem",letterSpacing:".22em",textTransform:"uppercase",color:T.mid,marginBottom:"1rem"}}>Select Size</div>
+              <div style={{display:"flex",gap:".5rem",flexWrap:"wrap"}}>
+                {["S","M","L","XL"].map(s=>{
+                  const sd=selProd.sizes?.[s]||{stock:0,on:true};
+                  if(!sd.on)return null;
+                  const oos=sd.stock===0;
+                  return<button key={s} disabled={oos} onClick={()=>setSelSize(s)} style={{fontFamily:"'Space Mono',monospace",fontSize:".65rem",letterSpacing:".1em",textTransform:"uppercase",background:selSize===s?T.acc2:"transparent",border:`1px solid ${oos?T.bdr:selSize===s?T.acc:T.mid}`,color:oos?T.mut:selSize===s?T.acc:T.mid,padding:".65rem 1rem",cursor:oos?"not-allowed":"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:".3rem",opacity:oos?.35:1,transition:"all .2s",minWidth:58}}>{s}<span style={{fontSize:".48rem",color:oos?T.mut:T.mid}}>{oos?"OOS":sd.stock+" left"}</span></button>;
+                })}
+              </div>
+              {!user?(
+                <div style={{marginTop:"2rem",padding:"1.2rem",background:T.acc2,border:`1px solid ${T.acc}22`}}>
+                  <div style={{fontFamily:"'Space Mono',monospace",fontSize:".58rem",letterSpacing:".15em",color:T.acc,marginBottom:".7rem"}}>Sign in to place an order</div>
+                  <button onClick={()=>setShowAuth(true)} style={{fontFamily:"'Space Mono',monospace",fontSize:".65rem",letterSpacing:".18em",textTransform:"uppercase",background:T.acc,color:T.bg,border:"none",padding:".75rem 1.5rem",fontWeight:700,cursor:"pointer"}}>Sign In / Sign Up</button>
+                </div>
+              ):(
+                <button onClick={()=>{if(!selSize){toast_("Select a size","err");return;}go("checkout");}} style={{width:"100%",marginTop:"2rem",fontFamily:"'Space Mono',monospace",fontSize:".72rem",letterSpacing:".2em",textTransform:"uppercase",background:selSize?T.acc:T.mut,color:selSize?T.bg:T.mid,border:"none",padding:"1.1rem",fontWeight:700,cursor:selSize?"pointer":"default",transition:"background .2s"}}>{selSize?`Order Now — Size ${selSize}`:"Select a Size First"}</button>
+              )}
+              <div style={{display:"flex",gap:".8rem",marginTop:"1rem",flexWrap:"wrap"}}>
+                {["💵 Cash on Delivery","🚫 No Returns"].map(b=><div key={b} style={{fontFamily:"'Space Mono',monospace",fontSize:".56rem",letterSpacing:".12em",textTransform:"uppercase",background:T.bg2,border:`1px solid ${T.bdr}`,color:T.mid,padding:".35rem .7rem"}}>{b}</div>)}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════ CHECKOUT ════ */}
+      {page==="checkout"&&selProd&&user&&(
+        <div style={{padding:"6rem 2rem 4rem",maxWidth:760,margin:"0 auto"}}>
+          <button onClick={()=>go("product")} style={{fontFamily:"'Space Mono',monospace",fontSize:".6rem",letterSpacing:".2em",textTransform:"uppercase",color:T.mid,background:"none",border:"none",marginBottom:"2rem",cursor:"pointer"}}>← Back</button>
+          <h2 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"3rem",letterSpacing:".08em",marginBottom:"2.5rem"}}>Checkout</h2>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"3rem",alignItems:"start"}}>
+            <div style={{display:"flex",flexDirection:"column",gap:"1.2rem"}}>
+              <div style={{background:T.card2,border:`1px solid ${T.bdr2}`,padding:"1.2rem"}}>
+                <div style={{fontFamily:"'Space Mono',monospace",fontSize:".56rem",letterSpacing:".22em",textTransform:"uppercase",color:T.acc,marginBottom:".6rem"}}>Ordering As</div>
+                <div style={{fontFamily:"'Space Mono',monospace",fontSize:".65rem",letterSpacing:".08em",color:T.mid,lineHeight:2}}><strong style={{color:T.white}}>{user.name}</strong><br/>📱 {user.phone}<br/>✉️ {user.email}</div>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:".5rem"}}><label style={LBL}>Delivery Address *</label><textarea value={ckAddr} onChange={e=>setCkAddr(e.target.value)} placeholder="House No., Street, Area, City, State, PIN Code" style={{...SI,minHeight:100,resize:"vertical"}}/></div>
+              <div style={{display:"flex",flexDirection:"column",gap:".5rem"}}><label style={LBL}>Payment</label><input readOnly value="Cash on Delivery (COD)" style={{...SI,color:T.mid}}/></div>
+              <button onClick={placeOrder} style={{width:"100%",background:T.acc,color:T.bg,border:"none",padding:"1.1rem",fontFamily:"'Space Mono',monospace",fontSize:".72rem",letterSpacing:".2em",textTransform:"uppercase",fontWeight:700,cursor:"pointer",marginTop:".5rem"}}>Place Order</button>
+              <div style={{fontFamily:"'Space Mono',monospace",fontSize:".52rem",letterSpacing:".1em",color:T.mut}}>// No returns policy applies.</div>
+            </div>
+            <div style={{background:T.card,border:`1px solid ${T.bdr2}`,padding:"1.8rem",position:"sticky",top:"7rem"}}>
+              <div style={{fontFamily:"'Space Mono',monospace",fontSize:".58rem",letterSpacing:".25em",textTransform:"uppercase",color:T.acc,marginBottom:"1.2rem"}}>Order Summary</div>
+              {selProd.image?<img src={selProd.image} alt={selProd.name} style={{width:"100%",aspectRatio:"4/3",objectFit:"cover",marginBottom:"1rem"}}/>:<div style={{width:"100%",aspectRatio:"4/3",background:"linear-gradient(140deg,#0d0d14,#1a1a2e)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:"1rem"}}><span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"3rem",color:"rgba(200,255,0,.06)"}}>{selProd.name[0]}</span></div>}
+              <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"1.4rem",letterSpacing:".06em"}}>{selProd.name}</div>
+              <div style={{fontFamily:"'Space Mono',monospace",fontSize:".6rem",letterSpacing:".12em",color:T.mid,marginTop:".4rem"}}>Size: {selSize}</div>
+              <div style={{fontFamily:"'Space Mono',monospace",fontSize:"1rem",color:T.acc,marginTop:".8rem",paddingTop:".8rem",borderTop:`1px solid ${T.bdr}`}}>{money(selProd.price)}</div>
+              <div style={{fontFamily:"'Space Mono',monospace",fontSize:".56rem",letterSpacing:".12em",textTransform:"uppercase",color:T.mid,marginTop:".4rem"}}>💵 Cash on Delivery</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════ CONFIRMATION ════ */}
+      {page==="confirmation"&&(
+        <div style={{padding:"4rem 2rem",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"100vh",textAlign:"center"}}>
+          <div style={{fontSize:"3.5rem",marginBottom:"1.5rem",animation:"fadeUp .5s ease both"}}>✅</div>
+          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"2.5rem",letterSpacing:".1em",color:T.acc,marginBottom:".5rem"}}>#{lastOid}</div>
+          <h2 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"3.8rem",letterSpacing:".06em",lineHeight:.95}}>ORDER<br/>PLACED!</h2>
+          <p style={{fontStyle:"italic",color:T.mid,fontSize:"1.1rem",lineHeight:1.7,marginTop:"1rem",maxWidth:400}}>Your order is confirmed. Track it anytime in My Orders.</p>
+          <div style={{marginTop:"1.5rem"}}><CopyBtn orderId={lastOid} toast_={toast_}/></div>
+          <div style={{display:"flex",gap:"1rem",marginTop:"1.5rem",flexWrap:"wrap",justifyContent:"center"}}>
+            <button onClick={()=>go("my-orders")} style={{fontFamily:"'Space Mono',monospace",fontSize:".68rem",letterSpacing:".2em",textTransform:"uppercase",background:T.acc,color:T.bg,border:"none",padding:".95rem 2.2rem",fontWeight:700,cursor:"pointer"}}>Track My Order</button>
+            <button onClick={()=>go("home")} style={{fontFamily:"'Space Mono',monospace",fontSize:".68rem",letterSpacing:".2em",textTransform:"uppercase",background:"transparent",color:T.white,border:`1px solid ${T.bdr2}`,padding:".95rem 2.2rem",cursor:"pointer"}}>Continue Shopping</button>
+          </div>
+        </div>
+      )}
+
+      {/* ════ MY ORDERS ════ */}
+      {page==="my-orders"&&(
+        <div style={{padding:"6rem 2rem 4rem",maxWidth:820,margin:"0 auto"}}>
+          <button onClick={()=>go("home")} style={{fontFamily:"'Space Mono',monospace",fontSize:".6rem",letterSpacing:".2em",textTransform:"uppercase",color:T.mid,background:"none",border:"none",marginBottom:"2rem",cursor:"pointer"}}>← Back</button>
+          <h2 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"3rem",letterSpacing:".08em"}}>My Orders</h2>
+          {!user?(
+            <div style={{marginTop:"2rem",padding:"3rem",border:`1px solid ${T.bdr}`,textAlign:"center"}}>
+              <div style={{fontFamily:"'Space Mono',monospace",fontSize:".65rem",letterSpacing:".2em",textTransform:"uppercase",color:T.mut,marginBottom:"1.5rem"}}>Sign in to view your orders</div>
+              <button onClick={()=>setShowAuth(true)} style={{fontFamily:"'Space Mono',monospace",fontSize:".68rem",letterSpacing:".18em",textTransform:"uppercase",background:T.acc,color:T.bg,border:"none",padding:".9rem 2rem",fontWeight:700,cursor:"pointer"}}>Sign In / Sign Up</button>
+            </div>
+          ):(
+            <>
+              <p style={{fontStyle:"italic",color:T.mid,marginTop:".5rem",marginBottom:"2.5rem",fontSize:"1.05rem"}}>Showing orders for {user.name}</p>
+              {myOrders.length===0?(
+                <div style={{padding:"3rem",textAlign:"center",border:`1px solid ${T.bdr}`,fontFamily:"'Space Mono',monospace",fontSize:".65rem",letterSpacing:".2em",textTransform:"uppercase",color:T.mut}}>No orders yet. Go shop! 🛍</div>
+              ):(
+                <div style={{display:"flex",flexDirection:"column",gap:"1px"}}>
+                  {myOrders.map(o=>{
+                    const sc=sCol(o.status,o.cancelled);
+                    const canCancel=!o.cancelled&&(o.status==="Placed"||o.status==="Accepted");
+                    return(
+                      <div key={o.id} style={{background:T.card,border:`1px solid ${T.bdr}`,padding:"1.8rem",opacity:o.cancelled?.5:1}}>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1rem",flexWrap:"wrap",gap:".5rem"}}>
+                          <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"1.4rem",letterSpacing:".1em",color:T.acc}}>#{o.order_id}</span>
+                          <div style={{display:"flex",alignItems:"center",gap:".6rem",flexWrap:"wrap"}}>
+                            <CopyBtn orderId={o.order_id} toast_={toast_}/>
+                            <span style={{fontFamily:"'Space Mono',monospace",fontSize:".55rem",letterSpacing:".18em",textTransform:"uppercase",background:`${sc}15`,color:sc,border:`1px solid ${sc}30`,padding:".3rem .65rem"}}>{o.cancelled?"Cancelled":o.status}</span>
+                          </div>
+                        </div>
+                        <div style={{display:"grid",gridTemplateColumns:"auto 1fr",gap:"1.2rem",alignItems:"start"}}>
+                          {o.product_image?<img src={o.product_image} alt={o.product_name} style={{width:70,height:90,objectFit:"cover"}}/>:<div style={{width:70,height:90,background:"linear-gradient(140deg,#0d0d14,#1a1a2e)",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"1.5rem",color:"rgba(200,255,0,.1)"}}>{o.product_name[0]}</span></div>}
+                          <div>
+                            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"1.3rem",letterSpacing:".06em"}}>{o.product_name}</div>
+                            <div style={{fontFamily:"'Space Mono',monospace",fontSize:".6rem",letterSpacing:".1em",color:T.mid,marginTop:".4rem",lineHeight:1.9}}>Size: {o.size} · {money(o.price)} · COD<br/>📍 {o.address}<br/>{new Date(o.created_at).toLocaleDateString("en-IN")}</div>
+                            {o.delivery_days>0&&!o.cancelled&&<div style={{fontFamily:"'Space Mono',monospace",fontSize:".6rem",letterSpacing:".1em",color:T.acc,marginTop:".5rem"}}>🚚 Est. {o.delivery_days} day{o.delivery_days>1?"s":""} from acceptance</div>}
+                          </div>
+                        </div>
+                        {canCancel&&<button onClick={()=>cancelMyOrder(o.order_id)} style={{marginTop:"1.2rem",fontFamily:"'Space Mono',monospace",fontSize:".6rem",letterSpacing:".18em",textTransform:"uppercase",background:"transparent",border:`1px solid ${T.bdr}`,color:T.mid,padding:".5rem 1rem",cursor:"pointer"}}>Cancel Order</button>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ════ ADMIN GATE ════ */}
+      {page==="admin"&&!user&&(
+        <div style={{padding:"8rem 2rem",textAlign:"center",minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"2rem",letterSpacing:".08em",marginBottom:"1.2rem"}}>Admin Access Required</div>
+          <button onClick={()=>setShowAuth(true)} style={{fontFamily:"'Space Mono',monospace",fontSize:".68rem",letterSpacing:".18em",textTransform:"uppercase",background:T.acc,color:T.bg,border:"none",padding:".9rem 2rem",fontWeight:700,cursor:"pointer"}}>Sign In as Admin</button>
+        </div>
+      )}
+
+      {/* ════ ADMIN PANEL ════ */}
+      {page==="admin"&&user?.role==="admin"&&(
+        <div style={{padding:"6rem 2rem 5rem",maxWidth:1120,margin:"0 auto"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"2.5rem",borderBottom:`1px solid ${T.bdr}`,paddingBottom:"1.2rem",flexWrap:"wrap",gap:"1rem"}}>
+            <div>
+              <h2 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"2.5rem",letterSpacing:".08em"}}>NOXEZ<span style={{color:T.acc}}>DRIPS</span> Admin</h2>
+              <div style={{fontFamily:"'Space Mono',monospace",fontSize:".58rem",letterSpacing:".15em",color:T.mut,marginTop:".3rem"}}>{user.email} · {user.isMain?"Main Admin":"Partner Admin"}</div>
+            </div>
+            <div style={{display:"flex",gap:".8rem"}}>
+              <button onClick={()=>go("home")} style={{fontFamily:"'Space Mono',monospace",fontSize:".58rem",letterSpacing:".15em",textTransform:"uppercase",background:"transparent",border:`1px solid ${T.bdr2}`,color:T.mid,padding:".5rem 1rem",cursor:"pointer"}}>← Store</button>
+              <button onClick={logout} style={{fontFamily:"'Space Mono',monospace",fontSize:".58rem",letterSpacing:".15em",textTransform:"uppercase",background:"transparent",border:"1px solid rgba(255,60,60,.3)",color:T.red,padding:".5rem 1rem",cursor:"pointer"}}>Logout</button>
+            </div>
+          </div>
+
+          {/* TABS */}
+          <div style={{display:"flex",borderBottom:`1px solid ${T.bdr}`,marginBottom:"2rem",flexWrap:"wrap"}}>
+            {[
+              ["orders","📦 Orders"],
+              ["products","👕 Products"],
+              ...(user.isMain?[["team","👥 Team"]]:[]
+            )].map(([id,label])=>(
+              <button key={id} onClick={()=>{setAdminTab(id);if(id==="orders")loadAdminOrders();if(id==="team")DB.getAdmins().then(a=>setAdmins(a));}} style={{fontFamily:"'Space Mono',monospace",fontSize:".63rem",letterSpacing:".2em",textTransform:"uppercase",background:"transparent",border:"none",cursor:"pointer",padding:".9rem 1.5rem",marginBottom:-1,borderBottom:`2px solid ${adminTab===id?T.acc:"transparent"}`,color:adminTab===id?T.acc:T.mut,transition:"all .2s"}}>{label}</button>
+            ))}
+          </div>
+
+          {/* ── ORDERS ── */}
+          {adminTab==="orders"&&(
+            <div>
+              {/* Search bar */}
+              <div style={{marginBottom:"1.5rem",position:"relative"}}>
+                <input value={searchQ} onChange={e=>setSearchQ(e.target.value)} placeholder="Search by Order ID, name, phone, product..." style={{...SI,paddingLeft:"2.8rem"}}/>
+                <span style={{position:"absolute",left:"1rem",top:"50%",transform:"translateY(-50%)",color:T.mut,fontSize:"1rem"}}>🔍</span>
+                {searchQ&&<button onClick={()=>setSearchQ("")} style={{position:"absolute",right:"1rem",top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:T.mut,cursor:"pointer",fontSize:".7rem",fontFamily:"'Space Mono',monospace"}}>✕ Clear</button>}
+              </div>
+              <div style={{fontFamily:"'Space Mono',monospace",fontSize:".58rem",letterSpacing:".15em",color:T.mut,marginBottom:"1rem"}}>
+                {filteredOrders.length} order{filteredOrders.length!==1?"s":""} {searchQ?"found":"total"}
+                {orders.length===0&&<button onClick={loadAdminOrders} style={{marginLeft:"1rem",fontFamily:"'Space Mono',monospace",fontSize:".58rem",letterSpacing:".15em",textTransform:"uppercase",background:T.acc,color:T.bg,border:"none",padding:".3rem .7rem",cursor:"pointer",fontWeight:700}}>Load Orders</button>}
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:"1px"}}>
+                {filteredOrders.length===0?(
+                  <div style={{padding:"3rem",textAlign:"center",border:`1px solid ${T.bdr}`,fontFamily:"'Space Mono',monospace",fontSize:".65rem",letterSpacing:".2em",textTransform:"uppercase",color:T.mut}}>{searchQ?"No orders match your search.":"No orders yet."}</div>
+                ):(
+                  filteredOrders.map(o=>{
+                    const sc=sCol(o.status,o.cancelled);
+                    return(
+                      <div key={o.id} style={{background:T.card,border:`1px solid ${T.bdr}`,padding:"1.8rem",opacity:o.cancelled?.4:1}}>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.2rem",flexWrap:"wrap",gap:".5rem"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:".8rem",flexWrap:"wrap"}}>
+                            <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"1.4rem",letterSpacing:".1em",color:T.acc}}>#{o.order_id}</span>
+                            <CopyBtn orderId={o.order_id} toast_={toast_}/>
+                          </div>
+                          <span style={{fontFamily:"'Space Mono',monospace",fontSize:".56rem",letterSpacing:".12em",color:T.mut}}>{new Date(o.created_at).toLocaleString("en-IN")}</span>
+                        </div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"1.5rem",marginBottom:"1.5rem"}}>
+                          <div><div style={{fontFamily:"'Space Mono',monospace",fontSize:".56rem",letterSpacing:".22em",textTransform:"uppercase",color:T.acc,marginBottom:".7rem"}}>Customer</div><div style={{fontFamily:"'Space Mono',monospace",fontSize:".64rem",letterSpacing:".07em",color:T.mid,lineHeight:2}}><strong style={{color:T.white}}>{o.customer_name}</strong><br/>📱 {o.phone}<br/>📍 {o.address}</div></div>
+                          <div><div style={{fontFamily:"'Space Mono',monospace",fontSize:".56rem",letterSpacing:".22em",textTransform:"uppercase",color:T.acc,marginBottom:".7rem"}}>Order</div><div style={{fontFamily:"'Space Mono',monospace",fontSize:".64rem",letterSpacing:".07em",color:T.mid,lineHeight:2}}><strong style={{color:T.white}}>{o.product_name}</strong><br/>Size: {o.size}<br/>{money(o.price)} · COD</div></div>
+                        </div>
+                        {o.cancelled?(
+                          <div style={{fontFamily:"'Space Mono',monospace",fontSize:".56rem",letterSpacing:".15em",textTransform:"uppercase",color:T.red,padding:".35rem .7rem",border:"1px solid rgba(255,60,60,.2)",display:"inline-block"}}>✕ Cancelled by Customer</div>
+                        ):(
+                          <div style={{display:"flex",gap:".8rem",flexWrap:"wrap",paddingTop:"1.2rem",borderTop:`1px solid ${T.bdr}`,alignItems:"center"}}>
+                            <div style={{display:"flex",gap:".5rem",alignItems:"center"}}>
+                              <input type="number" min="1" placeholder="Days" value={dayMap[o.order_id]||""} onChange={e=>setDayMap({...dayMap,[o.order_id]:e.target.value})} style={{background:T.bg2,border:`1px solid ${T.bdr2}`,color:T.white,fontFamily:"'Space Mono',monospace",fontSize:".65rem",padding:".5rem .8rem",outline:"none",width:80,textAlign:"center"}}/>
+                              <button onClick={()=>acceptOrder(o.order_id)} style={{fontFamily:"'Space Mono',monospace",fontSize:".6rem",letterSpacing:".15em",textTransform:"uppercase",background:T.acc,color:T.bg,border:"none",padding:".55rem 1rem",fontWeight:700,cursor:"pointer"}}>Accept</button>
+                            </div>
+                            <select value={o.status} onChange={e=>setStatus(o.order_id,e.target.value)} style={{background:T.bg2,border:`1px solid ${T.bdr2}`,color:T.white,fontFamily:"'Space Mono',monospace",fontSize:".62rem",letterSpacing:".08em",padding:".55rem .8rem",outline:"none",cursor:"pointer"}}>
+                              {["Placed","Accepted","Dispatched","Out for Delivery","Delivered"].map(s=><option key={s}>{s}</option>)}
+                            </select>
+                            <span style={{fontFamily:"'Space Mono',monospace",fontSize:".55rem",letterSpacing:".12em",textTransform:"uppercase",color:sc,padding:".3rem .65rem",background:`${sc}12`,border:`1px solid ${sc}25`}}>{o.status}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── PRODUCTS ── */}
+          {adminTab==="products"&&(
+            <div>
+              <div style={{background:T.card,border:`1px solid ${T.bdr2}`,padding:"2rem",marginBottom:"2rem"}}>
+                <div style={{display:"flex",alignItems:"center",gap:".8rem",marginBottom:"1.8rem"}}>
+                  <div style={{width:38,height:38,background:T.acc,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Bebas Neue',sans-serif",fontSize:"1.6rem",color:T.bg,fontWeight:700,flexShrink:0}}>+</div>
+                  <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"1.8rem",letterSpacing:".08em"}}>Add New Product</div>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"1rem"}}>
+                  <div style={{display:"flex",flexDirection:"column",gap:".5rem"}}><label style={LBL}>Product Name *</label><input style={SI} placeholder="e.g. Void Bomber Jacket" value={newProd.name} onChange={e=>setNewProd({...newProd,name:e.target.value})}/></div>
+                  <div style={{display:"flex",flexDirection:"column",gap:".5rem"}}><label style={LBL}>Price (₹) *</label><input style={SI} type="number" placeholder="e.g. 2499" value={newProd.price} onChange={e=>setNewProd({...newProd,price:e.target.value})}/></div>
+                  <div style={{display:"flex",flexDirection:"column",gap:".5rem",gridColumn:"1/-1"}}><label style={LBL}>Description</label><input style={SI} placeholder="Short description (optional)" value={newProd.desc} onChange={e=>setNewProd({...newProd,desc:e.target.value})}/></div>
+                  <div style={{display:"flex",flexDirection:"column",gap:".5rem",gridColumn:"1/-1"}}>
+                    <label style={LBL}>Product Image</label>
+                    <div style={{display:"flex",gap:"1rem",alignItems:"center",flexWrap:"wrap"}}>
+                      <input ref={fileRef} type="file" accept="image/*" onChange={handleImg} style={{display:"none"}}/>
+                      <button onClick={()=>fileRef.current.click()} style={{fontFamily:"'Space Mono',monospace",fontSize:".6rem",letterSpacing:".15em",textTransform:"uppercase",background:T.acc,color:T.bg,border:"none",padding:".7rem 1.3rem",fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>📷 Upload Photo</button>
+                      <span style={{fontFamily:"'Space Mono',monospace",fontSize:".56rem",color:T.mut}}>or paste URL:</span>
+                      <input style={{...SI,flex:1}} placeholder="https://..." value={newProd.image.startsWith?.("http")?newProd.image:""} onChange={e=>setNewProd({...newProd,image:e.target.value})}/>
+                    </div>
+                    {newProd.image&&(<div style={{display:"flex",gap:"1rem",alignItems:"center",marginTop:".8rem"}}><img src={newProd.image} alt="preview" style={{width:70,height:90,objectFit:"cover",border:`1px solid ${T.bdr2}`}}/><div><div style={{fontFamily:"'Space Mono',monospace",fontSize:".56rem",color:T.acc,marginBottom:".5rem"}}>✓ Image ready</div><button onClick={()=>setNewProd({...newProd,image:""})} style={{fontFamily:"'Space Mono',monospace",fontSize:".55rem",letterSpacing:".12em",textTransform:"uppercase",background:"transparent",border:`1px solid ${T.bdr}`,color:T.mut,padding:".3rem .6rem",cursor:"pointer"}}>Remove</button></div></div>)}
+                  </div>
+                  <div style={{gridColumn:"1/-1"}}>
+                    <label style={{...LBL,display:"block",marginBottom:".8rem"}}>Sizes & Stock — + / − to set · dot to enable/disable</label>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:".5px"}}>
+                      {["S","M","L","XL"].map(s=><SizeStock key={s} label={s} data={newProd.sizes[s]} onChange={d=>setNewProd({...newProd,sizes:{...newProd.sizes,[s]:d}})}/>)}
+                    </div>
+                  </div>
+                </div>
+                <button onClick={addProduct} style={{fontFamily:"'Space Mono',monospace",fontSize:".68rem",letterSpacing:".2em",textTransform:"uppercase",background:T.acc,color:T.bg,border:"none",padding:".9rem 2rem",fontWeight:700,cursor:"pointer",marginTop:"1.5rem",display:"flex",alignItems:"center",gap:".6rem"}}><span style={{fontSize:"1.1rem"}}>+</span> Add Product to Store</button>
+              </div>
+              {products.length===0?(
+                <div style={{padding:"3rem",textAlign:"center",border:`1px solid ${T.bdr}`,fontFamily:"'Space Mono',monospace",fontSize:".65rem",letterSpacing:".2em",textTransform:"uppercase",color:T.mut}}>No products yet.</div>
+              ):(
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:"1.5px"}}>
+                  {products.map(p=>(
+                    <div key={p.id} style={{background:T.card,border:`1px solid ${T.bdr}`,overflow:"hidden"}}>
+                      <div style={{position:"relative"}}>
+                        {p.image?<img src={p.image} alt={p.name} style={{width:"100%",aspectRatio:"3/4",objectFit:"cover",display:"block"}}/>:<div style={{width:"100%",aspectRatio:"3/4",background:"linear-gradient(140deg,#0d0d14,#1a1a2e)",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"4rem",color:"rgba(200,255,0,.05)"}}>{p.name[0]}</span></div>}
+                        <div style={{position:"absolute",top:".8rem",right:".8rem",fontFamily:"'Space Mono',monospace",fontSize:".52rem",letterSpacing:".15em",textTransform:"uppercase",background:totalStock(p)===0?"rgba(255,60,60,.9)":T.acc,color:totalStock(p)===0?T.white:T.bg,padding:".3rem .6rem",fontWeight:700}}>{totalStock(p)===0?"Out of Stock":totalStock(p)+" in stock"}</div>
+                      </div>
+                      <div style={{padding:"1.2rem"}}>
+                        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"1.4rem",letterSpacing:".06em"}}>{p.name}</div>
+                        <div style={{fontFamily:"'Space Mono',monospace",fontSize:".65rem",color:T.mid,marginTop:".3rem",marginBottom:"1rem"}}>{money(p.price)}</div>
+                        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:".5px",marginBottom:"1rem"}}>
+                          {["S","M","L","XL"].map(s=><SizeStock key={s} label={s} data={p.sizes?.[s]||{stock:0,on:true}} onChange={d=>updateSize(p.id,s,d)}/>)}
+                        </div>
+                        <div style={{fontFamily:"'Space Mono',monospace",fontSize:".5rem",letterSpacing:".1em",color:T.mut,marginBottom:"1rem"}}>Changes save instantly to all devices</div>
+                        <button onClick={()=>deleteProduct(p.id,p.name)} style={{width:"100%",fontFamily:"'Space Mono',monospace",fontSize:".58rem",letterSpacing:".15em",textTransform:"uppercase",background:"transparent",border:"1px solid rgba(255,60,60,.2)",color:T.red,padding:".6rem",cursor:"pointer"}}>Delete Product</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── TEAM (main admin only) ── */}
+          {adminTab==="team"&&user.isMain&&(
+            <div>
+              {/* Add partner admin */}
+              <div style={{background:T.card,border:`1px solid ${T.bdr2}`,padding:"2rem",marginBottom:"2rem"}}>
+                <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"1.8rem",letterSpacing:".08em",marginBottom:"1.5rem"}}>Add Partner Admin</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"1rem",marginBottom:"1rem"}}>
+                  <div style={{display:"flex",flexDirection:"column",gap:".5rem"}}><label style={LBL}>Partner Name *</label><input style={SI} placeholder="e.g. Rahul" value={newAdmin.name} onChange={e=>setNewAdmin({...newAdmin,name:e.target.value})}/></div>
+                  <div style={{display:"flex",flexDirection:"column",gap:".5rem"}}><label style={LBL}>Partner Email *</label><input style={SI} type="email" placeholder="partner@email.com" value={newAdmin.email} onChange={e=>setNewAdmin({...newAdmin,email:e.target.value})}/></div>
+                  <div style={{display:"flex",flexDirection:"column",gap:".5rem",gridColumn:"1/-1"}}><label style={LBL}>Password for them *</label><input style={SI} type="password" placeholder="Create a password for this admin" value={newAdmin.password} onChange={e=>setNewAdmin({...newAdmin,password:e.target.value})}/></div>
+                </div>
+                <div style={{fontFamily:"'Space Mono',monospace",fontSize:".58rem",letterSpacing:".1em",color:T.mut,marginBottom:"1rem",lineHeight:1.8}}>
+                  ℹ️ Share their email + password with your partner.<br/>They sign in the same way you do and get full admin access.
+                </div>
+                <button onClick={addPartnerAdmin} disabled={adminBusy} style={{fontFamily:"'Space Mono',monospace",fontSize:".68rem",letterSpacing:".2em",textTransform:"uppercase",background:adminBusy?T.mut:T.acc,color:T.bg,border:"none",padding:".9rem 2rem",fontWeight:700,cursor:adminBusy?"default":"pointer",display:"flex",alignItems:"center",gap:".6rem"}}><span>+</span>{adminBusy?"Adding...":"Add Partner Admin"}</button>
+              </div>
+
+              {/* Partner admins list */}
+              <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"1.5rem",letterSpacing:".08em",marginBottom:"1rem"}}>Current Partners</div>
+              {admins.length===0?(
+                <div style={{padding:"2rem",textAlign:"center",border:`1px solid ${T.bdr}`,fontFamily:"'Space Mono',monospace",fontSize:".65rem",letterSpacing:".2em",textTransform:"uppercase",color:T.mut}}>No partner admins yet.</div>
+              ):(
+                <div style={{display:"flex",flexDirection:"column",gap:"1px"}}>
+                  {admins.map(a=>(
+                    <div key={a.id} style={{background:T.card,border:`1px solid ${T.bdr}`,padding:"1.5rem",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"1rem"}}>
+                      <div>
+                        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"1.3rem",letterSpacing:".06em"}}>{a.name}</div>
+                        <div style={{fontFamily:"'Space Mono',monospace",fontSize:".6rem",letterSpacing:".1em",color:T.mid,marginTop:".3rem"}}>{a.email}<br/>Added {new Date(a.created_at).toLocaleDateString("en-IN")}</div>
+                      </div>
+                      <button onClick={()=>removePartnerAdmin(a.id,a.name)} style={{fontFamily:"'Space Mono',monospace",fontSize:".6rem",letterSpacing:".15em",textTransform:"uppercase",background:"transparent",border:"1px solid rgba(255,60,60,.3)",color:T.red,padding:".5rem 1rem",cursor:"pointer"}}>Remove</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<NoxezdripsApp/>);
+</script>
+</body>
+</html>
